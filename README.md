@@ -148,6 +148,17 @@ O placar usa `localStorage`. Dentro do iframe do itch isso pode vir bloqueado
 por restrições de cookies de terceiros, então as leituras e escritas estão em
 `try/catch` e o jogo funciona sem recorde se falhar.
 
+## Trocar de idioma
+
+Na tela de titulo ha uma grade de 10 codigos (EN PT ES FR DE / IT 日 한 简 繁);
+tocar em um troca na hora e guarda a escolha. Os botoes param a propagacao do
+toque -- sem isso, escolher um idioma comecaria a partida junto, ja que o
+jogo inteiro responde a um toque em qualquer lugar.
+
+A ordem de decisao e: **`?lang=` na URL** (serve para testar e para linkar uma
+versao especifica, ex.: `?lang=ja`), depois **a escolha salva**, e so entao o
+**idioma do aparelho**.
+
 ## Instalar no celular (PWA)
 
 O `www/` tambem e um PWA: com `manifest.json`, `sw.js` e os icones, o
