@@ -21,16 +21,40 @@
   var SPIN_MAX = 5.0;
 
   // ---------------------------------------------------------------- textos
-  // O idioma sai do aparelho. Ingles e o padrao de quem nao bater com nenhum,
-  // por ser o publico majoritario das lojas web. O chines distingue escrita
-  // tradicional (TW/HK/MO ou -hant) da simplificada.
-  var LANG = (function () {
-    var L = (navigator.language || 'en').toLowerCase();
-    if (L.indexOf('zh') === 0) {
-      return /hant|tw|hk|mo/.test(L) ? 'zhHant' : 'zhHans';
-    }
+  // Ordem de decisao: ?lang= na URL (serve para testar e para linkar uma
+  // versao especifica), depois a escolha que a pessoa fez e ficou salva,
+  // e so entao o idioma do aparelho. Ingles e o padrao de quem nao bater
+  // com nenhum, por ser o publico majoritario das lojas web.
+  var IDIOMAS = ['en', 'pt', 'es', 'fr', 'de', 'it', 'ja', 'ko', 'zhHans', 'zhHant'];
+
+  // como cada um aparece no seletor
+  var ROTULOS = {
+    en: 'EN', pt: 'PT', es: 'ES', fr: 'FR', de: 'DE',
+    it: 'IT', ja: '\u65e5', ko: '\ud55c', zhHans: '\u7b80', zhHant: '\u7e41'
+  };
+
+  function normalizar(L) {
+    L = (L || '').toLowerCase();
+    // o chines distingue escrita tradicional (TW/HK/MO ou -hant) da simplificada
+    if (L.indexOf('zh') === 0) return /hant|tw|hk|mo/.test(L) ? 'zhHant' : 'zhHans';
+    if (L === 'zhhans' || L === 'zhhant') return L === 'zhhans' ? 'zhHans' : 'zhHant';
     var base = L.split('-')[0];
-    return ({ pt: 1, es: 1, fr: 1, de: 1, it: 1, ja: 1, ko: 1, en: 1 })[base] ? base : 'en';
+    return IDIOMAS.indexOf(base) >= 0 ? base : null;
+  }
+
+  function idiomaSalvo() {
+    try { return localStorage.getItem('ichien.lang'); } catch (e) { return null; }
+  }
+  function salvarIdioma(v) {
+    try { localStorage.setItem('ichien.lang', v); } catch (e) {}
+  }
+
+  var LANG = (function () {
+    var daUrl = null;
+    try {
+      daUrl = normalizar(new URLSearchParams(location.search).get('lang'));
+    } catch (e) {}
+    return daUrl || normalizar(idiomaSalvo()) || normalizar(navigator.language) || 'en';
   })();
 
   var T = {
@@ -39,39 +63,39 @@
       tap:   'tap to start',
       over:  'it sank',
       again: 'tap to play again',
-      best:  'best \u00a5',
+      best:  'best ¥',
       paid:  'you made your yen back'
     },
     pt: {
-      sub:   'Alum\u00ednio puro, 1 grama.<br>Se cair deitada, ela boia.',
-      tap:   'toque para come\u00e7ar',
+      sub:   'Alumínio puro, 1 grama.<br>Se cair deitada, ela boia.',
+      tap:   'toque para começar',
       over:  'afundou',
       again: 'toque para jogar de novo',
-      best:  'recorde \u00a5',
-      paid:  'voc\u00ea recuperou o 1 iene'
+      best:  'recorde ¥',
+      paid:  'você recuperou o 1 iene'
     },
     es: {
       sub:   'Aluminio puro, 1 gramo.<br>Si cae plana, flota.',
       tap:   'toca para empezar',
-      over:  'se hundi\u00f3',
+      over:  'se hundió',
       again: 'toca para jugar otra vez',
-      best:  'r\u00e9cord \u00a5',
+      best:  'récord ¥',
       paid:  'recuperaste tu yen'
     },
     fr: {
-      sub:   'Aluminium pur, 1 gramme.<br>\u00c0 plat, elle flotte.',
+      sub:   'Aluminium pur, 1 gramme.<br>À plat, elle flotte.',
       tap:   'touchez pour commencer',
-      over:  'coul\u00e9e',
+      over:  'coulée',
       again: 'touchez pour rejouer',
-      best:  'record \u00a5',
-      paid:  'vous avez r\u00e9cup\u00e9r\u00e9 votre yen'
+      best:  'record ¥',
+      paid:  'vous avez récupéré votre yen'
     },
     de: {
       sub:   'Reines Aluminium, 1 Gramm.<br>Flach gelandet, schwimmt sie.',
       tap:   'tippen zum Starten',
       over:  'versunken',
-      again: 'tippen f\u00fcr neue Runde',
-      best:  'Bestwert \u00a5',
+      again: 'tippen für neue Runde',
+      best:  'Bestwert ¥',
       paid:  'du hast deinen Yen wieder'
     },
     it: {
@@ -79,42 +103,42 @@
       tap:   'tocca per iniziare',
       over:  'affondata',
       again: 'tocca per rigiocare',
-      best:  'record \u00a5',
+      best:  'record ¥',
       paid:  'hai recuperato il tuo yen'
     },
     ja: {
-      sub:   '\u30a2\u30eb\u30df100%\u30011\u30b0\u30e9\u30e0\u3002<br>\u5e73\u3089\u306b\u843d\u3061\u308c\u3070\u6c34\u306b\u6d6e\u304f\u3002',
-      tap:   '\u30bf\u30c3\u30d7\u3057\u3066\u30b9\u30bf\u30fc\u30c8',
-      over:  '\u3057\u305a\u3093\u3060',
-      again: '\u30bf\u30c3\u30d7\u3057\u3066\u3082\u3046\u4e00\u5ea6',
-      best:  '\u30d9\u30b9\u30c8 \u00a5',
-      paid:  '\u5143\u304c\u53d6\u308c\u305f'
+      sub:   'アルミ100%、1グラム。<br>平らに落ちれば水に浮く。',
+      tap:   'タップしてスタート',
+      over:  'しずんだ',
+      again: 'タップしてもう一度',
+      best:  'ベスト ¥',
+      paid:  '元が取れた'
     },
     ko: {
-      sub:   '\uc21c\uc218 \uc54c\ub8e8\ubbf8\ub284, 1\uadf8\ub7a8.<br>\ub0a9\uc9dd\ud558\uac8c \ub5a8\uc5b4\uc9c0\uba74 \ub730\ub2e4.',
-      tap:   '\ud0ed\ud574\uc11c \uc2dc\uc791',
-      over:  '\uac00\ub77c\uc549\uc558\ub2e4',
-      again: '\ud0ed\ud574\uc11c \ub2e4\uc2dc \ud558\uae30',
-      best:  '\ucd5c\uace0 \u00a5',
-      paid:  '1\uc5d4\uc744 \ub418\ucc3e\uc558\ub2e4'
+      sub:   '순수 알루미늄, 1그램.<br>납작하게 떨어지면 뜬다.',
+      tap:   '탭해서 시작',
+      over:  '가라앉았다',
+      again: '탭해서 다시 하기',
+      best:  '최고 ¥',
+      paid:  '1엔을 되찾았다'
     },
     zhHans: {
-      sub:   '\u7eaf\u94dd\uff0c1 \u514b\u3002<br>\u5e73\u7740\u843d\u4e0b\u5c31\u80fd\u6d6e\u8d77\u6765\u3002',
-      tap:   '\u70b9\u51fb\u5f00\u59cb',
-      over:  '\u6c89\u4e86',
-      again: '\u70b9\u51fb\u518d\u73a9\u4e00\u6b21',
-      best:  '\u6700\u9ad8 \u00a5',
-      paid:  '\u4f60\u628a\u8fd9 1 \u65e5\u5143\u8d5a\u56de\u6765\u4e86'
+      sub:   '纯铝，1 克。<br>平着落下就能浮起来。',
+      tap:   '点击开始',
+      over:  '沉了',
+      again: '点击再玩一次',
+      best:  '最高 ¥',
+      paid:  '你把这 1 日元赚回来了'
     },
     zhHant: {
-      sub:   '\u7d14\u92c1\uff0c1 \u516c\u514b\u3002<br>\u5e73\u8457\u843d\u4e0b\u5c31\u80fd\u6d6e\u8d77\u4f86\u3002',
-      tap:   '\u9ede\u64ca\u958b\u59cb',
-      over:  '\u6c89\u4e86',
-      again: '\u9ede\u64ca\u518d\u73a9\u4e00\u6b21',
-      best:  '\u6700\u9ad8 \u00a5',
-      paid:  '\u4f60\u628a\u9019 1 \u65e5\u5713\u8cfa\u56de\u4f86\u4e86'
+      sub:   '純鋁，1 公克。<br>平著落下就能浮起來。',
+      tap:   '點擊開始',
+      over:  '沉了',
+      again: '點擊再玩一次',
+      best:  '最高 ¥',
+      paid:  '你把這 1 日圓賺回來了'
     }
-  }[LANG];
+  };
 
   // ---------------------------------------------------------------- DOM
   var cv  = document.getElementById('game');
@@ -123,16 +147,49 @@
   var elLives = document.getElementById('lives');
   var elTitle = document.getElementById('title');
   var elOver  = document.getElementById('over');
+  var elIdiomas = document.getElementById('langs');
 
-  document.getElementById('t-sub').innerHTML = T.sub;
-  document.getElementById('t-tap').textContent = T.tap;
-  document.getElementById('o-label').textContent = T.over;
-  document.getElementById('o-again').textContent = T.again;
+  var t = T[LANG];
 
-  // o <html lang> correto faz o navegador escolher a variante de glifo
-  // certa do CJK (o mesmo caractere difere entre ja, zh-Hans e zh-Hant)
-  document.documentElement.lang =
-    LANG === 'zhHans' ? 'zh-Hans' : (LANG === 'zhHant' ? 'zh-Hant' : LANG);
+  // Reaplica tudo que e texto. Chamado no inicio e sempre que a pessoa troca
+  // de idioma -- inclusive com a tela de fim aberta, por isso o placar e o
+  // recorde tambem sao reescritos aqui.
+  function aplicarTextos() {
+    t = T[LANG];
+    document.getElementById('t-sub').innerHTML = t.sub;
+    document.getElementById('t-tap').textContent = t.tap;
+    document.getElementById('o-label').textContent = t.over;
+    document.getElementById('o-again').textContent = t.again;
+    document.getElementById('o-note').textContent = score >= 1 ? t.paid : '';
+    document.getElementById('o-best').textContent = t.best + best;
+    // o <html lang> certo faz o navegador escolher a variante de glifo certa
+    // do CJK: o mesmo caractere tem desenho diferente em ja, zh-Hans e zh-Hant
+    document.documentElement.lang =
+      LANG === 'zhHans' ? 'zh-Hans' : (LANG === 'zhHant' ? 'zh-Hant' : LANG);
+    var botoes = elIdiomas.children;
+    for (var i = 0; i < botoes.length; i++) {
+      botoes[i].classList.toggle('on', botoes[i].getAttribute('data-l') === LANG);
+    }
+  }
+
+  // Seletor de idioma, so na tela de titulo. Os botoes param a propagacao do
+  // toque, senao escolher um idioma comecaria a partida junto.
+  (function montarSeletor() {
+    for (var i = 0; i < IDIOMAS.length; i++) {
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.setAttribute('data-l', IDIOMAS[i]);
+      b.textContent = ROTULOS[IDIOMAS[i]];
+      b.addEventListener('pointerdown', function (e) {
+        e.stopPropagation();
+        e.preventDefault();
+        LANG = this.getAttribute('data-l');
+        salvarIdioma(LANG);
+        aplicarTextos();
+      });
+      elIdiomas.appendChild(b);
+    }
+  })();
 
   elLives.innerHTML = '<i></i><i></i><i></i>';
 
@@ -226,8 +283,8 @@
     overAt = performance.now();
     if (score > best) { best = score; saveBest(best); }
     document.getElementById('o-score').textContent = '¥' + score;
-    document.getElementById('o-note').textContent  = score >= 1 ? T.paid : '';
-    document.getElementById('o-best').textContent  = T.best + best;
+    document.getElementById('o-note').textContent  = score >= 1 ? t.paid : '';
+    document.getElementById('o-best').textContent  = t.best + best;
     elOver.classList.remove('hidden');
   }
 
@@ -531,6 +588,7 @@
 
   document.addEventListener('visibilitychange', function () { last = 0; });
 
+  aplicarTextos();
   resize();
   paintHud();
   requestAnimationFrame(frame);

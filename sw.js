@@ -12,7 +12,7 @@
  * Ao publicar uma versao nova, suba o numero de CACHE: o activate apaga os
  * caches antigos.
  */
-var CACHE = 'ichien-v1';
+var CACHE = 'ichien-v2';
 
 var ESSENCIAIS = [
   './',
