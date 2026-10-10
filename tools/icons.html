@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>1円 — ícones do PWA</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root { --paper: #f6efe3; --ink: #2e2a24; --ink-2: #867c6e; }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 24px; background: var(--paper); color: var(--ink);
+         font: 14px/1.6 "Segoe UI", system-ui, sans-serif; }
+  h1 { font-size: 18px; margin: 0 0 4px; }
+  p.lead { color: var(--ink-2); margin: 0 0 18px; max-width: 64ch; }
+  button { padding: 10px 16px; border: 1px solid rgba(46,42,36,.25); border-radius: 7px;
+           background: #fff; font: inherit; cursor: pointer; }
+  .log { margin-top: 14px; padding: 10px 12px; background: rgba(46,42,36,.055);
+         border-radius: 7px; font: 12px/1.7 Consolas, monospace; white-space: pre-wrap; }
+  .tira { display: flex; gap: 16px; flex-wrap: wrap; margin-top: 18px; align-items: flex-end; }
+  .tira figure { margin: 0; text-align: center; }
+  .tira img { border: 1px solid rgba(46,42,36,.15); border-radius: 8px; display: block; }
+  .tira figcaption { font: 11px Consolas, monospace; color: var(--ink-2); margin-top: 5px; }
+  .mask { border-radius: 50% !important; }
+  code { background: rgba(46,42,36,.07); padding: 1px 5px; border-radius: 3px;
+         font: 12px Consolas, monospace; }
+</style>
+</head>
+<body>
+
+<h1>Ícones do PWA</h1>
+<p class="lead">
+  Desenha os ícones com o mesmo <code>Coin.draw()</code> do jogo — o anverso
+  da moeda, com o broto — e envia para o receptor em
+  <code>127.0.0.1:5176</code>, que grava em <code>www/icons/</code>.
+  O segundo ícone é <em>maskable</em>: a arte fica dentro do círculo seguro
+  de 80%, porque o Android recorta o ícone na forma do sistema.
+</p>
+
+<button id="ir">gerar ícones</button>
+<div class="log" id="log">pronto</div>
+<div class="tira" id="tira"></div>
+
+<script src="../www/js/coin.js"></script>
+<script>
+(function () {
+  'use strict';
+  var RECV = 'http://127.0.0.1:5176/?name=';
+  var log = document.getElementById('log');
+  var tira = document.getElementById('tira');
+  function diz(m) { log.textContent += '\n' + m; }
+
+  // fracao do lado ocupada pelo diametro da moeda
+  function icone(lado, fracao, mascara) {
+    var c = document.createElement('canvas');
+    c.width = c.height = lado;
+    var x = c.getContext('2d');
+
+    var g = x.createLinearGradient(0, 0, 0, lado);
+    g.addColorStop(0, '#faf5ec');
+    g.addColorStop(1, '#ece1cd');
+    x.fillStyle = g;
+    x.fillRect(0, 0, lado, lado);
+
+    var r = lado * fracao / 2;
+    var cy = lado / 2;
+
+    x.save();                                  // sombra solta embaixo da moeda
+    x.translate(lado / 2, cy + r * 0.17);
+    x.scale(1, 0.26);
+    var s = x.createRadialGradient(0, 0, 0, 0, 0, r * 1.15);
+    s.addColorStop(0, 'rgba(60, 52, 38, .28)');
+    s.addColorStop(1, 'rgba(60, 52, 38, 0)');
+    x.fillStyle = s;
+    x.beginPath(); x.arc(0, 0, r * 1.15, 0, Math.PI * 2); x.fill();
+    x.restore();
+
+    // theta = PI deixa a moeda de frente mostrando o anverso (o broto)
+    Coin.draw(x, lado / 2, cy, r, Math.PI, { glow: false });
+    return c;
+  }
+
+  function enviar(nome, c, legenda, mascara) {
+    var url = c.toDataURL('image/png');
+    var fig = document.createElement('figure');
+    var img = new Image();
+    img.src = url;
+    img.width = Math.min(c.width, 128);
+    if (mascara) img.className = 'mask';
+    var cap = document.createElement('figcaption');
+    cap.textContent = legenda;
+    fig.appendChild(img); fig.appendChild(cap); tira.appendChild(fig);
+    return fetch(RECV + encodeURIComponent(nome), { method: 'POST', body: url })
+      .then(function () { diz('  gravado  ' + nome); });
+  }
+
+  document.getElementById('ir').onclick = function () {
+    this.disabled = true;
+    log.textContent = 'gerando…';
+    tira.innerHTML = '';
+    // 0.78 do lado: cheio, para o ícone comum
+    // 0.52 do lado: dentro do círculo seguro de 80%, para o maskable
+    Promise.resolve()
+      .then(function () { return enviar('icons/icon-192.png', icone(192, 0.78), '192 · comum'); })
+      .then(function () { return enviar('icons/icon-512.png', icone(512, 0.78), '512 · comum'); })
+      .then(function () { return enviar('icons/icon-512-maskable.png', icone(512, 0.52), '512 · maskable (recortado)', true); })
+      .then(function () { return enviar('icons/apple-touch-icon.png', icone(180, 0.74), '180 · iOS'); })
+      .then(function () { diz('\npronto.'); })
+      .catch(function (e) { diz('ERRO: ' + e.message); });
+  };
+})();
+</script>
+</body>
+</html>

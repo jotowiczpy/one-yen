@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>1円 — inspeção da cena</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root { --paper: #f6efe3; --ink: #2e2a24; --ink-2: #867c6e; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 24px;
+    background: var(--paper); color: var(--ink);
+    font: 14px/1.6 "Segoe UI", system-ui, sans-serif;
+  }
+  h1 { font-size: 18px; font-weight: 600; margin: 0 0 4px; }
+  p.lead { margin: 0 0 20px; color: var(--ink-2); max-width: 64ch; }
+  .wrap { display: flex; gap: 26px; align-items: flex-start; flex-wrap: wrap; }
+  iframe {
+    width: 375px; height: 812px; border: 0;
+    border-radius: 22px; box-shadow: 0 2px 20px rgba(46,42,36,.22);
+    background: var(--paper);
+  }
+  .panel { min-width: 250px; }
+  button {
+    display: block; width: 100%; margin: 0 0 8px;
+    padding: 9px 12px; border: 1px solid rgba(46,42,36,.22);
+    border-radius: 7px; background: #fff; color: var(--ink);
+    font: inherit; font-size: 13px; cursor: pointer; text-align: left;
+  }
+  button:hover { background: #fffdf8; border-color: rgba(46,42,36,.4); }
+  button:disabled { opacity: .45; cursor: default; }
+  .out {
+    margin-top: 14px; padding: 10px 12px;
+    background: rgba(46,42,36,.055); border-radius: 7px;
+    font: 12px/1.7 Consolas, monospace; white-space: pre-wrap; min-height: 6em;
+  }
+  code { background: rgba(46,42,36,.07); padding: 1px 5px; border-radius: 3px;
+         font: 12px Consolas, monospace; }
+</style>
+</head>
+<body>
+
+<h1>Inspeção da cena</h1>
+<p class="lead">
+  Carrega o <code>www/index.html</code> de verdade — mesmo HTML, mesmo
+  <code>game.js</code>, nada duplicado — mas com o <code>requestAnimationFrame</code>
+  e o relógio sob controle. Serve para parar a cena em estados que seriam
+  difíceis de alcançar jogando, como vários flutuadores cavando a superfície.
+</p>
+
+<div class="wrap">
+  <iframe id="jogo" title="1円"></iframe>
+  <div class="panel">
+    <button id="b-start"  disabled>iniciar a partida</button>
+    <button id="b-drop"   disabled>soltar uma moeda</button>
+    <button id="b-fill"   disabled>encher: 6 moedas boiando</button>
+    <button id="b-sink"   disabled>afundar uma (respingo + ondas)</button>
+    <button id="b-frame"  disabled>avançar 1 quadro</button>
+    <button id="b-run"    disabled>avançar 60 quadros</button>
+    <button id="b-reset"  disabled>recarregar</button>
+    <div class="out" id="out">carregando…</div>
+  </div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+  var ifr = document.getElementById('jogo');
+  var out = document.getElementById('out');
+  var W = null, D = null;
+
+  var PATCH =
+    '<script>' +
+    'window.__pending=null;' +
+    'window.requestAnimationFrame=function(f){window.__pending=f;return 0;};' +
+    'window.__clock=1000;' +
+    'performance.now=function(){return window.__clock;};' +
+    '<\/script>';
+
+  function botoes(on) {
+    ['b-start','b-drop','b-fill','b-sink','b-frame','b-run','b-reset']
+      .forEach(function (id) { document.getElementById(id).disabled = !on; });
+  }
+
+  function carregar() {
+    botoes(false);
+    out.textContent = 'carregando…';
+    fetch('../www/index.html').then(function (r) { return r.text(); }).then(function (html) {
+      // <base> para os caminhos relativos resolverem contra www/, e o patch
+      // entra ANTES dos scripts do jogo para pegar o primeiro quadro.
+      // o <base> tem que vir ANTES do <link>/<script>, senao os relativos
+      // resolvem contra tools/ e dao 404
+      html = html.replace('<head>', '<head><base href="../www/">')
+                 .replace('<script src="js/coin.js">', PATCH + '<script src="js/coin.js">');
+      var d = ifr.contentDocument;
+      d.open(); d.write(html); d.close();
+      W = ifr.contentWindow; D = d;
+      setTimeout(function () { botoes(true); estado('pronto'); }, 60);
+    });
+  }
+
+  function step(n) {
+    for (var i = 0; i < n; i++) {
+      W.__clock += 16.7;
+      var f = W.__pending;
+      W.__pending = null;
+      if (f) f(W.__clock);
+    }
+  }
+  function tap() { D.dispatchEvent(new W.PointerEvent('pointerdown', { bubbles: true })); }
+  function score() { return parseInt(D.getElementById('score').textContent.slice(1), 10) || 0; }
+  function over()  { return !D.getElementById('over').classList.contains('hidden'); }
+  function vidas() {
+    return [].filter.call(D.getElementById('lives').children,
+                          function (e) { return !e.classList.contains('off'); }).length;
+  }
+  function estado(msg) {
+    out.textContent = msg + '\n¥' + score() + '   vidas ' + vidas() +
+                      (over() ? '\nfim de jogo' : '');
+  }
+
+  // Solta repetidamente variando a fase ate juntar `alvo` moedas boiando.
+  function encher(alvo) {
+    var i = 0;
+    tap(); step(2);
+    while (score() < alvo && i < 300) {
+      i++;
+      if (over()) { W.__clock += 600; tap(); step(2); }
+      tap(); step(44);
+      step(3 + (i * 5) % 37);
+    }
+    estado('cheio em ' + i + ' tentativas');
+  }
+
+  // Solta ate UMA afundar, para ver o respingo e os aneis.
+  function afundar() {
+    var v = vidas(), i = 0;
+    while (vidas() === v && i < 60) { i++; tap(); step(44); step(3 + (i * 7) % 31); }
+    step(6);   // deixa o respingo subir, mas nao cair
+    estado('afundou em ' + i + ' tentativas');
+  }
+
+  document.getElementById('b-start').onclick = function () { tap(); step(2); estado('partida iniciada'); };
+  document.getElementById('b-drop').onclick  = function () { tap(); step(44); estado('moeda solta'); };
+  document.getElementById('b-fill').onclick  = function () { encher(6); };
+  document.getElementById('b-sink').onclick  = function () { afundar(); };
+  document.getElementById('b-frame').onclick = function () { step(1); estado('+1 quadro'); };
+  document.getElementById('b-run').onclick   = function () { step(60); estado('+60 quadros'); };
+  document.getElementById('b-reset').onclick = carregar;
+
+  // atalhos para dirigir daqui de fora
+  window.cena = { step: step, tap: tap, encher: encher, afundar: afundar,
+                  score: score, vidas: vidas, over: over };
+
+  carregar();
+})();
+</script>
+</body>
+</html>

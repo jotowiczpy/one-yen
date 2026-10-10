@@ -1,0 +1,280 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>1円 — capturas e capa</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root { --paper: #f6efe3; --ink: #2e2a24; --ink-2: #867c6e; }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 22px; background: var(--paper); color: var(--ink);
+         font: 14px/1.6 "Segoe UI", system-ui, sans-serif; }
+  h1 { font-size: 18px; margin: 0 0 4px; }
+  p.lead { color: var(--ink-2); margin: 0 0 18px; max-width: 64ch; }
+  button { padding: 10px 16px; border: 1px solid rgba(46,42,36,.25); border-radius: 7px;
+           background: #fff; font: inherit; cursor: pointer; }
+  button:hover { background: #fffdf8; }
+  #jogo { position: absolute; left: -9999px; width: 375px; height: 812px; border: 0; }
+
+  /* Modo palco (#palco na URL): a janela inteira vira o jogo, para a captura
+     de tela pegar a pagina renderizada -- canvas MAIS o HUD e as telas, que
+     sao HTML por cima e nao entram no toDataURL() do canvas. */
+  body.palco { padding: 0; overflow: hidden; }
+  body.palco h1, body.palco p.lead, body.palco button,
+  body.palco .log, body.palco .tira { display: none; }
+  body.palco #jogo { position: fixed; inset: 0; left: 0; width: 375px; height: 812px; }
+  .log { margin-top: 14px; padding: 10px 12px; background: rgba(46,42,36,.055);
+         border-radius: 7px; font: 12px/1.7 Consolas, monospace; white-space: pre-wrap; }
+  .tira { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 18px; align-items: flex-start; }
+  .tira img { height: 300px; border: 1px solid rgba(46,42,36,.18); border-radius: 6px; background: #fff; }
+  .tira img.capa { height: 220px; }
+</style>
+</head>
+<body>
+
+<h1>Capturas e capa</h1>
+<p class="lead">
+  Gera as imagens a partir do jogo de verdade e envia para o receptor em
+  <code>127.0.0.1:5176</code>, que grava em <code>dist/press/</code>.
+</p>
+
+<button id="ir">gerar tudo</button>
+<div class="log" id="log">pronto</div>
+<div class="tira" id="tira"></div>
+
+<iframe id="jogo" title="1円"></iframe>
+
+<script src="rig.js?v=1791648042"></script>
+<script>
+(function () {
+  'use strict';
+  var RECV = 'http://127.0.0.1:5176/?name=';
+  var log = document.getElementById('log');
+  var tira = document.getElementById('tira');
+  function diz(m) { log.textContent += '\n' + m; }
+
+  function enviar(nome, dataUrl) {
+    var img = new Image();
+    img.src = dataUrl;
+    if (nome.indexOf('capa') === 0) img.className = 'capa';
+    tira.appendChild(img);
+    return fetch(RECV + encodeURIComponent(nome), { method: 'POST', body: dataUrl })
+      .then(function () { diz('  gravado  ' + nome); });
+  }
+
+  // O HUD e as telas de titulo/fim sao HTML por cima do canvas, entao nao
+  // entram no toDataURL(). Aqui elas sao pintadas no PNG a partir do layout
+  // REAL: cada no de texto e desenhado no retangulo que o navegador ja
+  // calculou para ele, com a fonte e a cor computadas do elemento pai.
+  function pintarTexto(x, raiz, W) {
+    var D = raiz.ownerDocument;
+    var andarilho = D.createTreeWalker(raiz, 4 /* SHOW_TEXT */, null);
+    var no;
+    while ((no = andarilho.nextNode())) {
+      var txt = (no.nodeValue || '').trim();
+      if (!txt) continue;
+      var pai = no.parentElement;
+      var st = W.getComputedStyle(pai);
+      if (st.display === 'none' || st.visibility === 'hidden') continue;
+      if (st.textTransform === 'uppercase') txt = txt.toUpperCase();
+
+      var rng = D.createRange();
+      rng.selectNodeContents(no);
+      var rects = rng.getClientRects();
+      if (!rects.length) continue;
+
+      x.save();
+      x.globalAlpha *= parseFloat(st.opacity);
+      x.font = st.fontWeight + ' ' + st.fontSize + ' ' + st.fontFamily;
+      x.fillStyle = st.color;
+      x.textAlign = 'left';
+      x.textBaseline = 'middle';
+      try {
+        x.letterSpacing = st.letterSpacing === 'normal' ? '0px' : st.letterSpacing;
+      } catch (e) { /* navegador sem letterSpacing no canvas */ }
+
+      var partes = rects.length === 1 ? [txt] : repartir(x, txt, rects);
+      for (var i = 0; i < rects.length && i < partes.length; i++) {
+        x.fillText(partes[i], rects[i].left, rects[i].top + rects[i].height / 2);
+      }
+      x.restore();
+    }
+  }
+
+  // Um no de texto que o navegador quebrou em varias linhas vira varios
+  // retangulos; reparte as palavras pela largura de cada um.
+  function repartir(x, txt, rects) {
+    var palavras = txt.split(/\s+/);
+    var saida = [], k = 0;
+    for (var i = 0; i < rects.length; i++) {
+      var linha = '';
+      while (k < palavras.length) {
+        var tent = linha ? linha + ' ' + palavras[k] : palavras[k];
+        if (linha && x.measureText(tent).width > rects[i].width + 1) break;
+        linha = tent; k++;
+      }
+      saida.push(linha);
+    }
+    if (k < palavras.length) saida[saida.length - 1] += ' ' + palavras.slice(k).join(' ');
+    return saida;
+  }
+
+  function pintarBolinha(x, el, W) {
+    var st = W.getComputedStyle(el);
+    var r = el.getBoundingClientRect();
+    if (st.display === 'none' || !r.width) return;
+    x.save();
+    x.globalAlpha *= parseFloat(st.opacity);
+    x.beginPath();
+    x.arc(r.left + r.width / 2, r.top + r.height / 2, r.width / 2, 0, Math.PI * 2);
+    x.fillStyle = st.backgroundColor;
+    x.fill();
+    x.restore();
+  }
+
+  function pintarCamadas(x, rig) {
+    var D = rig.doc, W = rig.win;
+    var camadas = D.querySelectorAll('.layer');
+    for (var i = 0; i < camadas.length; i++) {
+      var cam = camadas[i];
+      var cs = W.getComputedStyle(cam);
+      if (cs.display === 'none') continue;
+      if (cs.backgroundColor && cs.backgroundColor.indexOf('rgba(0, 0, 0, 0)') < 0) {
+        x.fillStyle = cs.backgroundColor;              // o veu das telas
+        x.fillRect(0, 0, rig.canvas.clientWidth, rig.canvas.clientHeight);
+      }
+      var bolinhas = cam.querySelectorAll('i');        // vidas
+      for (var j = 0; j < bolinhas.length; j++) pintarBolinha(x, bolinhas[j], W);
+      pintarTexto(x, cam, W);
+    }
+  }
+
+  // PNG completo: canvas do jogo + as camadas HTML por cima.
+  function tela(rig) {
+    var src = rig.canvas;
+    var k = src.width / src.clientWidth;
+    var c = document.createElement('canvas');
+    c.width = src.width; c.height = src.height;
+    var x = c.getContext('2d');
+    x.drawImage(src, 0, 0);
+    x.scale(k, k);
+    pintarCamadas(x, rig);
+    return c.toDataURL('image/png');
+  }
+
+  // Capa 630x500: recorta a faixa da linha da agua da cena real e escreve o
+  // titulo por cima. Reaproveita o jogo em vez de redesenhar a agua.
+  //
+  // Precisa de um estado LIMPO: poucas moedas (muitas viram um trilho
+  // continuo em vez de objetos separados) e sem a linha tracejada da mira,
+  // que o jogo so desenha enquanto a partida esta em andamento.
+  function capa(rig) {
+    var src = rig.canvas;
+    var k = src.width / src.clientWidth;          // DPR do canvas do jogo
+    var linha = src.clientHeight * 0.60;          // onde fica a superficie
+    var sw = src.clientWidth;
+    var sh = Math.round(sw * 500 / 630);          // mesma proporcao da capa
+    var sy = Math.round(linha - sh * 0.68);       // agua fica no terco de baixo
+
+    var c = document.createElement('canvas');
+    c.width = 1260; c.height = 1000;              // 2x, para a capa ficar nitida
+    var x = c.getContext('2d');
+    x.imageSmoothingQuality = 'high';
+    x.drawImage(src, 0, Math.round(sy * k), Math.round(sw * k), Math.round(sh * k),
+                0, 0, 1260, 1000);
+
+    x.textAlign = 'center';
+    x.textBaseline = 'alphabetic';
+    x.fillStyle = '#2e2a24';
+    x.font = '300 280px "Hiragino Sans", "Yu Gothic", "Noto Sans JP", system-ui, sans-serif';
+    x.fillText('1円', 630, 330);
+
+    x.fillStyle = 'rgba(46,42,36,.6)';
+    x.font = '400 44px "Segoe UI", system-ui, sans-serif';
+    x.fillText('alumínio puro, 1 grama', 630, 408);
+
+    return c.toDataURL('image/png');
+  }
+
+  // No modo palco a pagina so carrega o jogo e expoe o rig; quem dirige e
+  // quem captura e de fora (as cenas vao em window.cenas).
+  if (location.hash === '#palco') {
+    document.body.className = 'palco';
+    window.pronto = Rig.load(document.getElementById('jogo'),
+      (new URLSearchParams(location.search).get('lang')) || 'en').then(function (r) {
+      window.rig = r;
+      r.step(2);
+      window.cenas = {
+        titulo:     function () { return 'ja esta'; },
+        partida:    function () { r.tap(); r.step(2); r.encher(2); r.girarAte(0.85); return r.score(); },
+        superficie: function () { return r.encher(6); },
+        afundou:    function () { return r.afundar(5); },
+        fim:        function () { while (!r.over()) { r.tap(); r.step(44); } r.step(2); return r.score(); }
+      };
+      return 'ok';
+    });
+  }
+
+  // expostos para regerar uma captura avulsa de um estado ja montado
+  window.tela = tela; window.enviar = enviar; window.capa = capa;
+
+  document.getElementById('ir').onclick = function () {
+    this.disabled = true;
+    log.textContent = 'carregando o jogo…';
+    tira.innerHTML = '';
+    var rig;
+
+    var LANG = (new URLSearchParams(location.search).get('lang')) || 'en';
+    Rig.load(document.getElementById('jogo'), LANG).then(function (r) {
+      rig = r;
+      rig.step(2);
+      diz('tela de titulo');
+      return enviar('tela-1-titulo.png', tela(rig));
+
+    }).then(function () {
+      rig.tap(); rig.step(2);                      // comeca
+      rig.encher(2);
+      rig.girarAte(0.85);                          // moeda bem aberta: vai afundar
+      diz('inicio de partida, ' + rig.score() + ' boiando');
+      return enviar('tela-2-partida.png', tela(rig));
+
+    }).then(function () {
+      rig.encher(6);
+      diz('agua cheia, ' + rig.score() + ' boiando, ' + rig.vidas() + ' vidas');
+      return enviar('tela-3-superficie.png', tela(rig));
+
+    }).then(function () {
+      rig.afundar(5);                              // respingo no ar
+      diz('impacto: respingo e aneis');
+      return enviar('tela-4-afundou.png', tela(rig));
+
+    }).then(function () {
+      while (!rig.over()) { rig.tap(); rig.step(44); }
+      rig.step(2);
+      diz('fim de jogo');
+      return enviar('tela-5-fim.png', tela(rig));
+
+    }).then(function () {
+      // partida nova so para a capa: 3 moedas e, depois, fim de jogo, que e
+      // quando o jogo para de desenhar a linha tracejada da mira
+      return Rig.load(document.getElementById('jogo'), LANG);
+
+    }).then(function (r2) {
+      rig = r2;
+      rig.step(2); rig.tap(); rig.step(2);
+      rig.encher(3);
+      while (!rig.over()) { rig.tap(); rig.step(44); }
+      rig.step(40);                                // respingos ja cairam
+      diz('capa: ' + rig.score() + ' moedas, cena limpa');
+      return enviar('capa.png', capa(rig));
+
+    }).then(function () {
+      diz('\npronto.');
+    }).catch(function (e) {
+      diz('ERRO: ' + e.message);
+    });
+  };
+})();
+</script>
+</body>
+</html>

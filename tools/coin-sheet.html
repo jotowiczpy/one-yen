@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>1円 — folha da moeda</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root { --paper: #f6efe3; --ink: #2e2a24; --ink-2: #867c6e; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 28px 24px 60px;
+    background: var(--paper); color: var(--ink);
+    font: 14px/1.6 "Segoe UI", system-ui, sans-serif;
+  }
+  h1 { font-size: 19px; font-weight: 600; margin: 0 0 4px; }
+  p.lead { margin: 0 0 26px; color: var(--ink-2); max-width: 62ch; }
+  h2 {
+    font-size: 11px; font-weight: 600; letter-spacing: .16em;
+    text-transform: uppercase; color: var(--ink-2);
+    margin: 30px 0 10px; padding-bottom: 6px;
+    border-bottom: 1px solid rgba(46,42,36,.12);
+  }
+  canvas { display: block; max-width: 100%; height: auto; }
+  .row { display: flex; flex-wrap: wrap; gap: 22px; align-items: flex-end; }
+  .ctl { display: flex; gap: 18px; align-items: center; flex-wrap: wrap; margin: 12px 0 0; }
+  label { display: flex; gap: 8px; align-items: center; color: var(--ink-2); font-size: 13px; }
+  input[type=range] { width: 190px; }
+  code {
+    background: rgba(46,42,36,.07); padding: 1px 5px; border-radius: 3px;
+    font: 12px/1.5 Consolas, monospace;
+  }
+  .dark { background: #22262a; padding: 18px; border-radius: 8px; }
+</style>
+</head>
+<body>
+
+<h1>Folha de inspeção da moeda</h1>
+<p class="lead">
+  Renderiza <code>Coin.draw()</code> isolado do jogo, para ajustar o desenho sem
+  ter que acertar o timing. Edite <code>www/js/coin.js</code> e recarregue.
+  Referência: 20&nbsp;mm × 1,5&nbsp;mm, 1,00&nbsp;g, alumínio 100%, borda lisa.
+</p>
+
+<h2>Giro completo — grande</h2>
+<canvas id="sweep-big"></canvas>
+
+<h2>Giro completo — tamanho real do jogo</h2>
+<canvas id="sweep-game"></canvas>
+
+<h2>As duas faces, de frente</h2>
+<div class="row">
+  <canvas id="faces"></canvas>
+  <div class="dark"><canvas id="faces-dark"></canvas></div>
+</div>
+
+<h2>Ao vivo</h2>
+<canvas id="live"></canvas>
+<div class="ctl">
+  <label>raio <input type="range" id="r" min="14" max="150" value="100"><span id="r-v"></span></label>
+  <label>giro <input type="range" id="s" min="0" max="60" value="12"><span id="s-v"></span></label>
+  <label><input type="checkbox" id="g" checked> halo</label>
+  <label>|cos| <span id="c-v"></span></label>
+</div>
+
+<script src="../www/js/coin.js"></script>
+<script>
+(function () {
+  'use strict';
+  var DPR = Math.min(window.devicePixelRatio || 1, 2);
+  var TAU = Math.PI * 2;
+
+  // O tamanho em CSS tem que encolher nos DOIS eixos quando nao cabe na
+  // largura -- so `max-width` achataria a moeda na horizontal.
+  function fit(cv, w, h) {
+    cv.width = w * DPR; cv.height = h * DPR;
+    var k = Math.min(1, (document.body.clientWidth - 48) / w);
+    cv.style.width = (w * k) + 'px';
+    cv.style.height = (h * k) + 'px';
+    var c = cv.getContext('2d');
+    c.setTransform(DPR, 0, 0, DPR, 0, 0);
+    return c;
+  }
+
+  function label(c, txt, x, y) {
+    c.fillStyle = 'rgba(46,42,36,.45)';
+    c.font = '11px Consolas, monospace';
+    c.textAlign = 'center';
+    c.textBaseline = 'middle';
+    c.fillText(txt, x, y);
+  }
+
+  // ---- giros ----------------------------------------------------------
+  function sweep(id, r, n) {
+    var cell = r * 2 + 26;
+    var cols = Math.min(n, Math.max(4, Math.floor((window.innerWidth - 60) / cell)));
+    var rows = Math.ceil(n / cols);
+    var c = fit(document.getElementById(id), cols * cell, rows * (cell + 16));
+    for (var i = 0; i < n; i++) {
+      var th = i / n * TAU;
+      var cx = (i % cols) * cell + cell / 2;
+      var cy = Math.floor(i / cols) * (cell + 16) + cell / 2;
+      Coin.draw(c, cx, cy, r, th, { glow: false });
+      label(c, Math.abs(Math.cos(th)).toFixed(2), cx, cy + cell / 2 + 4);
+    }
+  }
+  sweep('sweep-big', 56, 16);
+  sweep('sweep-game', 36, 16);   // 36px = o raio real em tela de 375px
+
+  // ---- as duas faces --------------------------------------------------
+  function faces(id) {
+    var r = 96;
+    var c = fit(document.getElementById(id), r * 4 + 70, r * 2 + 34);
+    Coin.draw(c, r + 22, r + 17, r, Math.PI, { glow: false });   // anverso (broto)
+    Coin.draw(c, r * 3 + 48, r + 17, r, 0, { glow: false });     // verso (o "1")
+    return c;
+  }
+  faces('faces');
+  faces('faces-dark');
+
+  // ---- ao vivo --------------------------------------------------------
+  var live = document.getElementById('live');
+  var lc = fit(live, 340, 340);
+  var R = document.getElementById('r'), S = document.getElementById('s'), G = document.getElementById('g');
+  var rv = document.getElementById('r-v'), sv = document.getElementById('s-v'), cvv = document.getElementById('c-v');
+  var th = 0, last = 0;
+
+  function loop(now) {
+    var dt = Math.min(0.05, (now - (last || now)) / 1000);
+    last = now;
+    var spin = S.value / 10;
+    th = (th + spin * dt) % TAU;
+    lc.clearRect(0, 0, 340, 340);
+    Coin.draw(lc, 170, 170, +R.value, th, { glow: G.checked });
+    rv.textContent = R.value + 'px';
+    sv.textContent = spin.toFixed(1) + ' rad/s';
+    cvv.textContent = Math.abs(Math.cos(th)).toFixed(2);
+    requestAnimationFrame(loop);
+  }
+  requestAnimationFrame(loop);
+
+  document.title = '1円 — ' + Coin.ano;
+})();
+</script>
+</body>
+</html>

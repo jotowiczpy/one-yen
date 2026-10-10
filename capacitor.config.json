@@ -1,0 +1,11 @@
+{
+  "appId": "br.com.cfis.ichien",
+  "appName": "1円",
+  "webDir": "www",
+  "server": {
+    "androidScheme": "https"
+  },
+  "android": {
+    "backgroundColor": "#f6efe3"
+  }
+}
