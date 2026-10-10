@@ -125,3 +125,35 @@ h1 .yen { font-size: .62em; margin-left: .04em; }
   letter-spacing: .1em;
   color: var(--ink-2);
 }
+
+/* --- Seletor de idioma (so na tela de titulo) --- */
+.langs {
+  /* grade em vez de flex-wrap: 5 por linha sempre, sem depender da
+     largura da tela nem da largura que cada rótulo acaba tendo */
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 2px 4px;
+  margin-top: 30px;
+  pointer-events: auto;        /* a .layer ao redor deixa o toque passar */
+}
+.langs button {
+  min-width: 30px;
+  padding: 5px 7px;
+  border: 0;
+  border-radius: 5px;
+  background: none;
+  color: var(--ink-2);
+  font: inherit;
+  font-size: 11px;
+  letter-spacing: .06em;
+  opacity: .5;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: opacity .15s, background .15s;
+}
+.langs button:hover { opacity: .85; }
+.langs button.on {
+  opacity: 1;
+  color: var(--ink);
+  background: rgba(46, 42, 36, .09);
+}
