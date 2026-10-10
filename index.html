@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>1円</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="theme-color" content="#f6efe3">
+
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="icon" href="icons/icon-192.png" type="image/png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="1円">
+
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <canvas id="game"></canvas>
+
+  <div id="hud" class="layer">
+    <div id="score">¥0</div>
+    <div id="lives"></div>
+  </div>
+
+  <div id="title" class="layer screen">
+    <h1>1<span class="yen">円</span></h1>
+    <p id="t-sub" class="sub"></p>
+    <p id="t-tap" class="tap"></p>
+  </div>
+
+  <div id="over" class="layer screen hidden">
+    <p id="o-label" class="label"></p>
+    <p id="o-score" class="big"></p>
+    <p id="o-note" class="note"></p>
+    <p id="o-best" class="best"></p>
+    <p id="o-again" class="tap"></p>
+  </div>
+
+  <script src="js/coin.js"></script>
+  <script src="js/game.js"></script>
+  <script>
+  // O service worker e o que deixa o jogo instalavel e jogavel offline.
+  // Nao registra dentro do app nativo (Capacitor): la os arquivos ja sao
+  // locais, e um cache a mais so serviria para servir a versao antiga depois
+  // de uma atualizacao. Tambem nao roda em file://, onde nao e permitido.
+  if ('serviceWorker' in navigator && !window.Capacitor &&
+      location.protocol !== 'file:') {
+    window.addEventListener('load', function () {
+      navigator.serviceWorker.register('sw.js').catch(function () {});
+    });
+  }
+  </script>
+</body>
+</html>
